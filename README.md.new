@@ -1,0 +1,104 @@
+# 行空板紫外线指数传感器 (UniHiker UV Index Sensor)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![版本](https://img.shields.io/badge/版本-1.0.1-blue.svg)](https://github.com/username/unihiker-uvindex-sensor)
+
+针对行空板(UniHiker)优化的紫外线指数传感器扩展，解决了 I2C 通信问题，支持 PinPong 库，同时兼容 Arduino 平台。
+
+## 主要特点
+
+- 🛠️ 修复了行空板 PinPong 库 I2C 通信问题
+- 📊 改进的 UV 指数计算和错误处理
+- 🌈 支持 Arduino 和行空板双平台
+- 📱 提供 Mind+ 积木块支持
+- 🔄 自动识别和处理设备 ID 字节序问题
+
+## 使用方法
+
+### Mind+ 中使用
+
+1. 导入扩展包 `rockts-unihiker-uvindex-sensor-V1.0.1.mpext`
+2. 在积木区找到"行空板紫外线指数传感器"积木块
+3. 使用积木块读取 UV 指数、原始数据或风险等级
+
+### Python 代码中使用
+
+```python
+from unihiker_uv_patch_v3 import PatchUVSensor
+
+# 创建传感器对象
+sensor = PatchUVSensor()
+sensor.begin()
+
+# 读取数据
+raw_value = sensor.read_UV_original_data()
+uv_index = sensor.read_UV_index_data()
+risk_level = sensor.read_risk_level_data()
+
+print(f"原始值: {raw_value}")
+print(f"UV指数: {uv_index}")
+print(f"风险等级: {risk_level}")
+```
+
+### Arduino 中使用
+
+```cpp
+#include <DFRobot_UVIndex240370Sensor.h>
+
+DFRobot_UVIndex240370Sensor UVSensor;
+
+void setup() {
+  Serial.begin(115200);
+  
+  // 初始化传感器
+  UVSensor.begin();
+}
+
+void loop() {
+  // 读取原始值
+  uint16_t raw = UVSensor.getRaw();
+  
+  // 读取 UV 指数
+  uint8_t index = UVSensor.getUvIndex();
+  
+  // 读取风险级别
+  uint8_t riskLevel = UVSensor.getRiskLevel();
+  
+  Serial.print("原始值: ");
+  Serial.println(raw);
+  
+  Serial.print("UV指数: ");
+  Serial.println(index);
+  
+  Serial.print("风险等级: ");
+  Serial.println(riskLevel);
+  
+  delay(1000);
+}
+```
+
+## 文档
+
+详细文档请参阅 `docs` 目录：
+
+- [使用指南](docs/USER_GUIDE.md)
+- [问题修复文档](docs/I2C_FIX_DOCUMENTATION.md) 
+- [技术规格](docs/TECHNICAL_SPEC.md)
+- [Mind+ 指南](docs/MINDPLUS_UV_GUIDE.md)
+
+## 目录结构
+
+```
+unihiker-uvindex-sensor/
+├── arduinoC/        - Arduino 库和示例
+├── python/          - Python 库和 Mind+ 扩展
+├── docs/            - 项目文档
+├── examples/        - 示例程序
+├── build/           - 构建文件
+├── build_extension.sh - 扩展包构建脚本
+└── deploy_to_unihiker.sh - 行空板部署脚本
+```
+
+## 开源协议
+
+本项目采用 MIT 开源协议。详情请参阅 [LICENSE](LICENSE) 文件。
