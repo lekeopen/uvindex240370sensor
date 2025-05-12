@@ -1,36 +1,28 @@
-# Python相关
+# 忽略所有文件和目录
+/*
+
+# 不忽略这些文件和目录
+!/.gitignore
+!/config.json
+!/README.md
+!/LICENSE
+!/arduinoC/
+!/python/
+
+# 只保留最新的 mpext 文件
+*.mpext
+!/lekeopen-uvindex240370sensor-V0.0.2.mpext
+
+# 忽略构建目录和临时文件
+build/
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Arduino相关
-*.hex
-*.elf
-*.bin
-
-# IDE相关
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# 操作系统相关
 .DS_Store
 Thumbs.db
+
+# 忽略脚本和文档目录
+/scripts/
+/docs/
+/backups/
