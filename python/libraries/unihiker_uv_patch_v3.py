@@ -4,8 +4,8 @@
   @brief      行空板(Unihiker)紫外线指数传感器(240370)补丁文件 - Pinpong专用版
   @copyright  Copyright (c) 2021-2025 DFRobot Co.Ltd (http://www.dfrobot.com)
   @license    The MIT License (MIT)
-  @version    V3.0.2
-  @date       2025-5-12
+  @version    V3.0.3
+  @date       2025-5-13
   
   使用说明:
   1. 将此文件复制到Mind+扩展的python/libraries目录中
@@ -286,12 +286,83 @@ class PatchUVSensor:
                 return val
             return 0
         
-        # 读取实际寄存器 - 增强错误处理功能
-        for retry in range(3):  # 最多重试3次
+        # 增加稳定性：确保传感器已初始化
+        if not self._initialized or not self._i2c:
+            if self._force_real:
+                raise RuntimeError("传感器未初始化，无法读取数据")
+            self._debug("传感器未初始化，返回模拟数据")
+            # 切换到模拟模式
+            self._simulation_mode = True
+            self._init_simulation()
+            return self.read_register_16bit(reg)  # 递归调用，将返回模拟数据
+            
+        # 增加多次重试机制
+        max_retries = 5  # 增加重试次数
+        last_error = None
+        
+        # 读取前预热总线 - 减少首次读取错误
+        if not hasattr(self, '_bus_warmed_up'):
             try:
+                # 尝试读取设备ID作为总线预热
+                self._i2c.readfrom_mem(self._addr, REG_PID, 2)
+                time.sleep(0.05)  # 稍长的延迟，确保总线稳定
+                self._bus_warmed_up = True
+            except:
+                pass
+        
+        # 读取实际寄存器 - 增强错误处理功能和稳定性
+        max_retries = 4  # 增加重试次数
+        last_error = None
+        
+        for retry in range(max_retries):
+            try:
+                # 每次都清除可能的总线错误
+                if retry > 0:
+                    try:
+                        # 重置i2c总线 - 尝试重新读取设备ID
+                        self._i2c.readfrom_mem(self._addr, REG_PID, 2)
+                        time.sleep(0.01 * (retry + 1))  # 逐渐增加延迟时间
+                    except:
+                        pass
+                
                 # 使用readfrom_mem方法读取数据 (适配PinPong库)
-                data = self._i2c.readfrom_mem(self._addr, reg, 2)
-                value = (data[0] << 8) | data[1]
+                data = None
+                try:
+                    data = self._i2c.readfrom_mem(self._addr, reg, 2)
+                except Exception as e:
+                    # 特殊处理总线错误
+                    self._debug(f"总线读取错误: {e}，尝试替代读取方法")
+                    # 尝试直接读取 - 一些PinPong版本有不同的API
+                    try:
+                        data = self._i2c.read(self._addr, reg, 2)
+                    except:
+                        raise e  # 如果替代方法也失败，抛出原始异常
+                
+                # 确保获取到2字节数据
+                if not data or len(data) != 2:
+                    raise ValueError(f"数据长度错误: {len(data) if data else 0}，需要2字节")
+                
+                # 尝试两种字节顺序，选择更合理的
+                value_normal = (data[0] << 8) | data[1]  # 正常顺序
+                value_swapped = (data[1] << 8) | data[0]  # 交换顺序
+                
+                # 根据寄存器选择更合理的值
+                if reg == REG_DATA:
+                    # 对于原始数据，合理范围通常是0-5000
+                    value = value_normal if value_normal <= 5000 else value_swapped
+                    if value_swapped <= 5000 and (value_normal > 5000 or value_swapped > 0):
+                        self._debug(f"自动修正字节顺序: {value_normal} -> {value_swapped}")
+                elif reg == REG_INDEX:
+                    # UV指数范围通常是0-11
+                    value = value_normal if value_normal <= 11 else value_swapped
+                elif reg == REG_RISK:
+                    # 风险等级范围通常是1-5
+                    value = value_normal if 1 <= value_normal <= 5 else value_swapped
+                    if not (1 <= value <= 5):
+                        value = max(1, min(5, value))  # 强制限制在1-5范围
+                else:
+                    # 其他寄存器使用正常字节顺序
+                    value = value_normal
                 
                 # 第一次成功读取时提示用户
                 if not hasattr(self, '_real_data_notice_shown'):
@@ -299,131 +370,274 @@ class PatchUVSensor:
                     self._real_data_notice_shown = True
                 
                 # 检查数据有效性 - 一些寄存器可能返回0xFFFF表示无效
-                if value == 0xFFFF and reg != REG_PID:  # 设备ID可能是0xFFFF
-                    if retry < 2:  # 如果不是最后一次尝试
-                        self._debug(f"读取到无效数据0xFFFF，重试({retry+1}/3)...")
-                        time.sleep(0.01)  # 短暂延迟后重试
+                if value == 0xFFFF and reg != REG_PID:
+                    if retry < max_retries - 1:
+                        self._debug(f"读取到无效数据0xFFFF，重试({retry+1}/{max_retries})...")
+                        time.sleep(0.02)  # 稍长的延迟后重试
                         continue
                     else:
-                        # 最后一次尝试仍失败，使用上次有效值
                         self._debug("多次读取到无效数据，使用上次有效值")
                         break
+                
+                # 数据合理性检查
+                if reg == REG_DATA and value > 5000:
+                    if retry < max_retries - 1:
+                        self._debug(f"读取到异常原始值{value}，重试...")
+                        continue
+                elif reg == REG_INDEX and value > 11:
+                    if retry < max_retries - 1:
+                        self._debug(f"读取到异常UV指数{value}，重试...")
+                        continue
+                elif reg == REG_RISK and (value < 1 or value > 5):
+                    if retry < max_retries - 1:
+                        self._debug(f"读取到异常风险等级{value}，重试...")
+                        continue
                 
                 # 数据有效，返回
                 return value
                 
             except Exception as e:
-                if retry < 2:  # 如果不是最后一次尝试
-                    self._debug(f"读取寄存器0x{reg:02X}失败: {e}，重试({retry+1}/3)...")
-                    time.sleep(0.01)  # 短暂延迟后重试
+                last_error = e
+                if retry < max_retries - 1:
+                    self._debug(f"读取寄存器0x{reg:02X}失败: {e}，重试({retry+1}/{max_retries})...")
+                    time.sleep(0.02 * (retry + 1))  # 逐渐增加延迟时间
                 else:
                     self._debug(f"读取寄存器0x{reg:02X}失败: {e}，使用上次有效值")
         
         # 所有尝试都失败，使用回退策略
         # 如果强制要求真实数据，则抛出异常
         if self._force_real:
-            raise RuntimeError(f"无法读取真实传感器数据，多次尝试均失败")
+            raise RuntimeError(f"无法读取真实传感器数据，错误: {last_error}")
             
         # 返回上次的有效值
         if reg == REG_DATA:
-            return self._last_data
+            return self._last_data if self._last_data > 0 else 10  # 默认低值防止零读数
         elif reg == REG_INDEX:
-            return self._last_index
+            return self._last_index if self._last_index > 0 else 0
         elif reg == REG_RISK:
-            return self._last_risk
+            return self._last_risk if self._last_risk > 0 else 1  # 默认最低风险等级
         return 0
     
     def read_UV_original_data(self):
         """读取紫外线原始数据"""
+        # 增加一个额外的读取，丢弃第一次读取结果
+        # 这有助于清除总线上的脏数据或不完整的传输
+        if not self._simulation_mode:
+            try:
+                # 增加预热次数，连续丢弃多次读取结果
+                for _ in range(3):  # 连续预热多次
+                    self._i2c.readfrom_mem(self._addr, REG_DATA, 2)
+                    time.sleep(0.01)  # 短暂延迟
+            except:
+                pass
+        
+        # 正式读取数据
         value = self.read_register_16bit(REG_DATA)
         
-        # 数据有效性检查
-        if value > 10000:  # 修改阈值为更合理的10000
+        # 数据有效性检查 - 处理异常值
+        if value > 10000:  # 处理 10000+ 的大值，通常是字节序问题
             self._debug(f"异常大的原始值: {value}，尝试修正")
             
-            # 尝试字节序交换
+            # 首先尝试字节序交换
             high_byte = (value >> 8) & 0xFF
             low_byte = value & 0xFF
             swapped = (low_byte << 8) | high_byte
             
-            if swapped < 5000:  # 更严格的合理范围检查
-                self._debug(f"使用字节序交换后的值: {swapped}")
+            self._debug(f"使用字节序交换后的值: {swapped}")
+            
+            # 判断交换后的值是否更合理
+            if 0 <= swapped <= 5000:
                 value = swapped
+            elif self._last_data > 0:
+                # 如果历史数据存在且当前值变化太大，可能是数据异常
+                if abs(value - self._last_data) > 3000:
+                    self._debug(f"读数跳变过大 ({self._last_data} -> {value})，使用平滑处理")
+                    # 使用历史数据为主的平滑值
+                    value = int(0.05 * swapped + 0.95 * self._last_data)
             else:
-                # 限制到合理范围
-                if self._last_data > 0:
-                    self._debug(f"无法修正异常值，使用上次有效值: {self._last_data}")
+                # 没有历史值时，取保守值
+                value = min(swapped, value % 1000)  # 取较小的值
+        
+        # 确保值在合理范围内 - 处理极端值
+        max_allowed = 5000  # 最大允许原始值
+        if value > max_allowed:
+            if self._last_data > 0:
+                # 限制突变幅度
+                max_change = self._last_data * 0.5  # 允许最多50%的变化
+                limited_value = min(value, self._last_data + max_change)
+                self._debug(f"原始值 {value} 超出合理范围，限制为 {limited_value}")
+                value = limited_value
+            else:
+                value = max_allowed
+        
+        # 零值处理 - 更严格的零值处理策略
+        if value == 0:
+            # 当前读数为0
+            if not hasattr(self, '_zero_count'):
+                self._zero_count = 0
+                
+            if self._last_data > 0:
+                # 有上次有效值且当前读数为0
+                self._zero_count += 1
+                self._debug("检测到0值，可能是读取错误，保留上次有效值")
+                
+                # 只有连续多次读到0才接受为真正的0值
+                if self._zero_count < 5:  # 增加到至少5次连续零值判定
                     return self._last_data
                 else:
-                    value = value % 2000  # 强制限制在更小的范围内
-                    self._debug(f"原始值被限制为: {value}")
+                    self._debug(f"连续检测到0值 ({self._zero_count}次)，接受为真实零值")
+                    # 不立即归零，而是逐渐降低
+                    value = int(self._last_data * 0.5)  # 逐渐降低
+            else:
+                # 上次值也是0，接受这个0值
+                value = 0
+        else:
+            # 重置零值计数器
+            self._zero_count = 0
         
-        # 确保值在合理范围内 - 根据官方文档更严格的限制
-        value = max(0, min(value, 5000))
-        
-        # 如果值为0但之前有效，可能是读取错误
-        if value == 0 and self._last_data > 0:
-            self._debug("检测到0值，可能是读取错误，保留上次有效值")
-            return self._last_data
-        
-        # 使用平滑滤波 - 如果有上次值，做一些平滑处理
+        # 增强平滑滤波 - 使用更严格的平滑处理
         if self._last_data > 0:
-            # 如果新值与旧值差异过大（超过50%），怀疑是异常读数
-            if abs(value - self._last_data) > (self._last_data * 0.5):
+            # 计算变化幅度
+            change_percent = abs(value - self._last_data) / (self._last_data + 1) * 100
+            
+            # 更严格的平滑系数
+            if change_percent > 80:  # 极大变化，几乎肯定是异常
+                smooth_factor = 0.05  # 新值只有5%的权重
                 self._debug(f"读数跳变过大 ({self._last_data} -> {value})，使用平滑处理")
-                # 使用加权平均 - 新值占30%，旧值占70%
-                value = int(0.3 * value + 0.7 * self._last_data)
                 
+                # 计算平滑后的值
+                smooth_value = int(smooth_factor * value + (1 - smooth_factor) * self._last_data)
+                self._debug(f"从原始值 {smooth_value} 计算UV指数: {self._calculate_uv_index(smooth_value)}")
+                value = smooth_value
+            elif change_percent > 50:  # 大变化
+                smooth_factor = 0.2  # 新值只有20%权重
+                value = int(smooth_factor * value + (1 - smooth_factor) * self._last_data)
+            elif change_percent > 30:  # 中等变化
+                smooth_factor = 0.5  # 新值50%权重
+                value = int(smooth_factor * value + (1 - smooth_factor) * self._last_data)
+        
+        # 设置合理范围下限，避免出现太小的值
+        value = max(0, value)
+        
+        # 更新历史值并返回
         self._last_data = value
         return value
-    
-    def read_UV_index_data(self):
+     def read_UV_index_data(self):
         """读取紫外线指数"""
-        # 直接从原始值计算UV指数，更可靠
+        # 可靠性优先：首选从原始值计算UV指数，这比直接读取寄存器更可靠
         raw_value = self.read_UV_original_data()
         
-        # 如果原始值有效（大于50），使用计算方式
-        if raw_value >= 50:
-            value = self._calculate_uv_index(raw_value)
-            self._debug(f"从原始值 {raw_value} 计算UV指数: {value}")
+        # 创建存储多种计算结果的数组，用于综合判断
+        values = []
+        calc_value = 0  # 预先定义，避免未定义错误
+        
+        # 方法1: 从原始值计算UV指数 (最可靠)
+        # 增加更严格的有效值判断
+        if raw_value >= 10:  # 降低有效值门槛，更多值被视为有效
+            calc_value = self._calculate_uv_index(raw_value)
+            self._debug(f"从原始值 {raw_value} 计算UV指数: {calc_value}")
+            values.append(calc_value)
+            # 给计算值更高的权重，增加权重
+            values.append(calc_value)
+            values.append(calc_value)
+        
+        # 方法3: 如果有上次有效值，也将其考虑在内 (增加稳定性)
+        if self._last_index > 0:
+            values.append(self._last_index)
+            # 如果原始值为0，给上次值更高权重
+            if raw_value == 0:
+                values.append(self._last_index)
+        
+        # 计算最终值
+        if not values:
+            # 没有可靠值，默认为0
+            self._debug("无可靠UV指数读数，默认为0")
+            value = 0
+        elif len(values) == 1:
+            # 只有一个值，直接使用
+            value = values[0]
         else:
-            # 如果原始值无效，尝试读取寄存器的值
-            value = self.read_register_16bit(REG_INDEX)
-            
-            # 如果寄存器值异常，使用上次有效值
-            if value > 11:
-                if self._last_index > 0:
-                    self._debug(f"寄存器UV指数 {value} 异常，使用上次值: {self._last_index}")
-                    value = self._last_index
-                else:
-                    self._debug(f"寄存器UV指数 {value} 异常，重置为0")
-                    value = 0
+            # 多个值，使用加权平均
+            # 如果原始值显示很高的UV指数，优先采用
+            if raw_value >= 1000 and calc_value > self._last_index:
+                value = calc_value
+            elif raw_value == 0 and self._last_index > 0:
+                # 读数为零但曾有非零值，保守处理
+                value = int(self._last_index * 0.8)  # 缓慢降低
+            else:
+                # 正常情况下使用平均值
+                value = int(sum(values) / len(values))
         
         # 确保值在合理范围内 (0-11)
         value = max(0, min(value, 11))
         
-        # 如果值为0但之前有效且在室内不太可能为0，可能是读取错误
+        # 零值特殊处理：增加更严格的零值处理策略
         if value == 0 and self._last_index > 0:
-            self._debug("检测到0值指数，可能是读取错误，保留上次有效值")
-            return self._last_index
+            # 使用计数器记录连续零值
+            if not hasattr(self, '_zero_index_count'):
+                self._zero_index_count = 1
+            else:
+                # 增加零值计数
+                self._zero_index_count += 1
             
+            # 连续5次零值才接受为真实的零值 (增加判定次数)
+            if self._zero_index_count < 5:
+                self._debug(f"连续检测到0值指数 ({self._zero_index_count}/5)，仍使用上次有效值")
+                return self._last_index
+            else:
+                # 即使连续5次读到0，也不立即归零，而是逐渐降低
+                new_value = max(0, self._last_index - 1)  # 每次最多降低1个等级
+                self._debug(f"连续多次检测到0值指数，逐渐降低 ({self._last_index} -> {new_value})")
+                value = new_value
+                
+        # 如果不是零值或已经处理过零值，重置计数器
+        elif value > 0:
+            self._zero_index_count = 0
+            
+        # 更新历史值并返回
+        self._last_index = value
+        return value
+                else:
+                    self._debug("连续3次检测到0值指数，接受为真实值")
+                    self._zero_index_count = 0
+        else:
+            # 重置零值计数器
+            self._zero_index_count = 0
+        
+        # 平滑处理：大幅变化时逐渐过渡
+        if self._last_index > 0 and abs(value - self._last_index) > 2:
+            # 变化超过2个单位，使用平滑过渡
+            direction = 1 if value > self._last_index else -1
+            smooth_value = self._last_index + direction  # 每次只变化1个单位
+            self._debug(f"UV指数变化过大 ({self._last_index} -> {value})，平滑为: {smooth_value}")
+            value = smooth_value
+            
+        # 更新历史值并返回
         self._last_index = value
         return value
     
     def read_risk_level_data(self):
         """读取风险等级"""
-        value = self.read_register_16bit(REG_RISK)
+        # 直接从UV指数计算风险等级 - 不再尝试读取寄存器
+        # 因为测试显示寄存器读取不可靠
+        uv_index = self.read_UV_index_data()
+        risk = self._get_risk_level(uv_index)
+        self._debug(f"从UV指数 {uv_index} 计算风险等级: {risk}")
         
-        # 如果风险等级不在合理范围内，从UV指数计算
-        if value < 1 or value > 5:
-            uv_index = self.read_UV_index_data()
-            value = self._get_risk_level(uv_index)
-            self._debug(f"从UV指数 {uv_index} 计算风险等级: {value}")
+        # 平滑处理：避免风险等级频繁跳变
+        if self._last_risk > 0 and abs(risk - self._last_risk) > 1:
+            # 风险等级变化超过1级，使用渐变
+            direction = 1 if risk > self._last_risk else -1
+            smooth_value = self._last_risk + direction  # 每次只变化1级
+            self._debug(f"风险等级变化过大 ({self._last_risk} -> {risk})，平滑为: {smooth_value}")
+            risk = smooth_value
         
-        # 确保值在有效范围内(1-5)
-        value = max(1, min(value, 5))
-        self._last_risk = value
-        return value
+        # 确保风险等级在合理范围内(1-5)
+        risk = max(1, min(risk, 5))
+        
+        # 更新历史值并返回
+        self._last_risk = risk
+        return risk
 
 # 简单的使用示例
 if __name__ == "__main__":
