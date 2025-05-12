@@ -24,7 +24,7 @@
 
 - **新项目结构**：
 
-  - 创建了新的项目目录 `/Users/gaopeng/Desktop/unihiker-uvindex-sensor/`
+  - 创建了新的项目目录 `/Users/gaopeng/Desktop/lekeopen-uvindex240370sensor/`
   - 更新了扩展 ID 和名称
   - 组织了所有必要的文件和文档
 
