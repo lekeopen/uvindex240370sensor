@@ -158,10 +158,10 @@ time.sleep(0.5)`);
     //% blockType="reporter"
     export function readUV(parameter: any): number {
         const type = parameter.eType.code;
-        if (type === "UV指数") {
-            Generator.addCode(`int(uv.read_UV_index_data())`);
-        } else if (type === "原始数据") {
+        if (type === "原始数据") {
             Generator.addCode(`int(uv.read_UV_original_data())`);
+        } else if (type === "UV指数") {
+            Generator.addCode(`int(uv.read_UV_index_data())`);
         } else if (type === "风险等级") {
             Generator.addCode(`int(uv.read_risk_level_data())`);
         } else {
