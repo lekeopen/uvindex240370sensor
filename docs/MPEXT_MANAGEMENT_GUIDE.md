@@ -27,22 +27,43 @@
 
 然后执行 `git push` 将更改推送到远程仓库。
 
+### 完整的远程仓库准备流程
+
+我们提供了一个综合性的脚本，用于一次性完成所有远程仓库发布准备工作，包括管理 MPEXT 文件和优化 README：
+
+```bash
+./scripts/prepare_remote_repo.sh
+```
+
+这个脚本会：
+1. 检查并列出所有 MPEXT 文件
+2. 准备远程仓库专用的 README.md
+3. 管理 MPEXT 文件，只保留最新版本
+4. 执行最终状态检查
+5. 提供推送选项
+6. 可选创建版本标签
+
+详细说明请参阅 [远程仓库管理指南](./REMOTE_REPO_GUIDE.md)。
+
 ## 注意事项
 
 - 这些脚本应在项目根目录下执行
 - 在提交前请确保最新的 `.mpext` 文件已经过测试
 - `manage_remote_mpext.sh` 脚本会自动创建 git 提交，您只需要执行 `git push`
+- `prepare_remote_repo.sh` 脚本提供了最完整的远程仓库准备流程，推荐使用
 
 ## 手动管理方法
 
 如果需要手动管理 `.mpext` 文件：
 
 1. **查看所有 mpext 文件**：
+
    ```bash
    ls -la *.mpext
    ```
 
 2. **只保留最新的 3 个文件**：
+
    ```bash
    ls -t *.mpext | tail -n +4 | xargs rm -f
    ```
