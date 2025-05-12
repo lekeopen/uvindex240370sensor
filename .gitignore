@@ -23,7 +23,10 @@ examples/
 
 # 排除构建和临时文件
 build/
-*.mpext
+# 保留lekeopen的mpext文件，排除其他mpext文件
+dfrobot-*.mpext
+# 保留一个可用的mpext文件
+!lekeopen-uvindex240370sensor-V1.0.1.mpext
 .DS_Store
 .vscode/
 __pycache__/
