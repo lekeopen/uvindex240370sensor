@@ -1,7 +1,7 @@
 # Gravity: 240370 紫外线指数传感器 (UV Index Sensor)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![版本](https://img.shields.io/badge/版本-0.0.6-blue.svg)](https://github.com/rockts/lekeopen-uvindex240370sensor)
+[![版本](https://img.shields.io/badge/版本-0.0.7-blue.svg)](https://github.com/rockts/lekeopen-uvindex240370sensor)
 
 <div align="center">
   <img src="./arduinoC/_images/featured.png" width="400" alt="UV Index Sensor"/>
@@ -24,7 +24,7 @@
 
 在 [Releases](https://github.com/rockts/lekeopen-uvindex240370sensor/releases) 页面下载最新的扩展包。
 
-- 当前版本：[lekeopen-uvindex240370sensor-V0.0.6.mpext](https://github.com/rockts/lekeopen-uvindex240370sensor/raw/main/lekeopen-uvindex240370sensor-V0.0.6.mpext)
+- 当前版本：[lekeopen-uvindex240370sensor-V0.0.7.mpext](https://github.com/rockts/lekeopen-uvindex240370sensor/raw/main/lekeopen-uvindex240370sensor-V0.0.7.mpext)
 
 ## 🚀 使用方法
 
@@ -177,7 +177,7 @@ lekeopen-uvindex240370sensor/
 ├── config.json               # 扩展配置文件
 ├── LICENSE                   # MIT许可证
 ├── README.md                 # 本文档
-├── lekeopen-uvindex240370sensor-V0.0.6.mpext  # 最新版本的扩展包
+├── lekeopen-uvindex240370sensor-V0.0.7.mpext  # 最新版本的扩展包
 ├── arduinoC/                 # Arduino平台相关文件
 │   ├── _images/              # 图像资源
 │   ├── _locales/             # 多语言支持
@@ -194,12 +194,16 @@ lekeopen-uvindex240370sensor/
 
 ## 🔄 版本历史
 
+- **0.0.7** (2025.05.13)
+  - 修复 Mind+ 导入错误问题
+  - 确保正确打包 libraries.zip 文件
+  - 优化打包脚本
 - **0.0.6** (2025.05.13)
   - 优化数据显示格式，解决终端数据重叠问题
-  - 使用ASCII框架式格式化输出，提高可读性
+  - 使用 ASCII 框架式格式化输出，提高可读性
   - 添加清屏控制，避免数据堆积
 - **0.0.5** (2025.05.13)
-  - 修复UV指数为1时风险等级计算错误问题
+  - 修复 UV 指数为 1 时风险等级计算错误问题
   - 改进数据输出方式，增加文本标签
   - 创建自动化脚本管理远程仓库
 - **0.0.4** (2025.05.13)
@@ -207,7 +211,7 @@ lekeopen-uvindex240370sensor/
   - 增强零值处理与数据平滑滤波
   - 解决数据跳变和读取错误问题
 - **0.0.3** (2025.05.13)
-  - 修复Arduino Uno兼容性问题
+  - 修复 Arduino Uno 兼容性问题
   - 添加扩展包管理功能
   - 优化库文件结构
 - **0.0.2** (2025.05.13)
