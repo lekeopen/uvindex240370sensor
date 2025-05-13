@@ -172,11 +172,13 @@ class PatchUVSensor:
         """根据UV指数计算风险等级"""
         if uv_index <= 0:  # 修改为包括小于等于0的所有情况
             return 0  # 无风险
-        elif uv_index <= 2:
+        elif uv_index == 1:  # UV指数为1时风险等级为0
+            return 0  # 低风险但显示为无风险
+        elif uv_index <= 3:
             return 1  # 低
-        elif uv_index <= 5:
+        elif uv_index <= 6:
             return 2  # 中
-        elif uv_index <= 7:
+        elif uv_index <= 8:
             return 3  # 高
         elif uv_index <= 10:
             return 4  # 很高
@@ -440,14 +442,14 @@ if __name__ == "__main__":
     
     if sensor.begin():
         try:
-            # 简单循环输出三个值，与Arduino UNO输出保持一致
+            # 格式化输出三个值，防止显示重叠
             while True:
-                # 只输出三个整数值，不添加任何额外文本
-                print(int(sensor.read_UV_original_data()))
+                # 添加标签明确区分数据类型，避免数据混淆
+                print(f"原始值：{int(sensor.read_UV_original_data())}")
                 time.sleep(2)
-                print(int(sensor.read_UV_index_data()))
+                print(f"uv指数：{int(sensor.read_UV_index_data())}")
                 time.sleep(2)
-                print(int(sensor.read_risk_level_data()))
+                print(f"风险等级：{int(sensor.read_risk_level_data())}")
                 time.sleep(2)
         except KeyboardInterrupt:
             pass
