@@ -364,10 +364,10 @@ class PatchUVSensor:
                     # UV指数范围通常是0-11
                     value = value_normal if value_normal <= 11 else value_swapped
                 elif reg == REG_RISK:
-                    # 风险等级范围通常是1-5
-                    value = value_normal if 1 <= value_normal <= 5 else value_swapped
-                    if not (1 <= value <= 5):
-                        value = max(1, min(5, value))  # 强制限制在1-5范围
+                    # 风险等级范围通常是0-5 (0=无风险，1-5=风险等级)
+                    value = value_normal if 0 <= value_normal <= 5 else value_swapped
+                    if not (0 <= value <= 5):
+                        value = max(0, min(5, value))  # 强制限制在0-5范围
                 else:
                     # 其他寄存器使用正常字节顺序
                     value = value_normal
@@ -533,116 +533,71 @@ class PatchUVSensor:
     
     def read_UV_index_data(self):
         """读取紫外线指数"""
-        # 可靠性优先：首选从原始值计算UV指数，这比直接读取寄存器更可靠
         raw_value = self.read_UV_original_data()
-        
-        # 创建存储多种计算结果的数组，用于综合判断
         values = []
-        calc_value = 0  # 预先定义，避免未定义错误
-        
-        # 方法1: 从原始值计算UV指数 (最可靠)
-        # 增加更严格的有效值判断并限制异常大的原始值
-        if raw_value > 1200:  # 超过阈值的原始值直接映射到最大UV指数
+        calc_value = 0
+        # 严格限制原始值异常导致的UV指数溢出
+        if raw_value > 1200:
             calc_value = 11
             self._debug(f"异常大的原始值: {raw_value}，限制为最大UV指数11")
-        elif raw_value >= 10:  # 降低有效值门槛，更多值被视为有效
+        elif raw_value >= 10:
             calc_value = self._calculate_uv_index(raw_value)
             self._debug(f"从原始值 {raw_value} 计算UV指数: {calc_value}")
-            values.append(calc_value)
-            # 给计算值更高的权重，增加权重
-            values.append(calc_value)
-            values.append(calc_value)
-        
-        # 方法3: 如果有上次有效值，也将其考虑在内 (增加稳定性)
+            values.extend([calc_value, calc_value, calc_value])
         if self._last_index > 0:
             values.append(self._last_index)
-            # 如果原始值为0，给上次值更高权重
             if raw_value == 0:
                 values.append(self._last_index)
-        
-        # 计算最终值
         if not values:
-            # 没有可靠值，默认为0
             self._debug("无可靠UV指数读数，默认为0")
             value = 0
         elif len(values) == 1:
-            # 只有一个值，直接使用
             value = values[0]
         else:
-            # 多个值，使用加权平均
-            # 如果原始值显示很高的UV指数，优先采用
             if raw_value >= 1000 and calc_value > self._last_index:
                 value = calc_value
             elif raw_value == 0 and self._last_index > 0:
-                # 读数为零但曾有非零值，保守处理
-                value = int(self._last_index * 0.8)  # 缓慢降低
+                value = int(self._last_index * 0.8)
             else:
-                # 正常情况下使用平均值
                 value = int(sum(values) / len(values))
-        
-        # 确保值在合理范围内 (0-11)
         value = max(0, min(value, 11))
-        
-        # 零值特殊处理：增加更严格的零值处理策略
+        # 连续零值判定
         if value == 0 and self._last_index > 0:
-            # 使用计数器记录连续零值
             if not hasattr(self, '_zero_index_count'):
                 self._zero_index_count = 1
             else:
-                # 增加零值计数
                 self._zero_index_count += 1
-            
-            # 连续5次零值才接受为真实的零值 (增加判定次数)
             if self._zero_index_count < 5:
                 self._debug(f"连续检测到0值指数 ({self._zero_index_count}/5)，仍使用上次有效值")
                 return self._last_index
             else:
-                # 即使连续5次读到0，也不立即归零，而是逐渐降低
-                new_value = max(0, self._last_index - 1)  # 每次最多降低1个等级
+                new_value = max(0, self._last_index - 1)
                 self._debug(f"连续多次检测到0值指数，逐渐降低 ({self._last_index} -> {new_value})")
                 value = new_value
-                
-        # 如果不是零值或已经处理过零值，重置计数器
         elif value > 0:
             self._zero_index_count = 0
-            
-        # 平滑处理：大幅变化时逐渐过渡
         if self._last_index > 0 and abs(value - self._last_index) > 2:
-            # 变化超过2个单位，使用平滑过渡
             direction = 1 if value > self._last_index else -1
-            smooth_value = self._last_index + direction  # 每次只变化1个单位
+            smooth_value = self._last_index + direction
             self._debug(f"UV指数变化过大 ({self._last_index} -> {value})，平滑为: {smooth_value}")
             value = smooth_value
-            
-        # 更新历史值并返回
         self._last_index = value
         return value
-    
+
     def read_risk_level_data(self):
         """读取风险等级"""
-        # 直接从UV指数计算风险等级 - 不再尝试读取寄存器
-        # 因为测试显示寄存器读取不可靠
         uv_index = self.read_UV_index_data()
         risk = self._get_risk_level(uv_index)
         self._debug(f"从UV指数 {uv_index} 计算风险等级: {risk}")
-        
-        # 特殊处理：UV指数为0时，风险等级必须为0
         if uv_index <= 0:
             self._last_risk = 0
             return 0
-            
-        # 平滑处理：避免风险等级频繁跳变
         if self._last_risk > 0 and abs(risk - self._last_risk) > 1:
-            # 风险等级变化超过1级，使用渐变
             direction = 1 if risk > self._last_risk else -1
-            smooth_value = self._last_risk + direction  # 每次只变化1级
+            smooth_value = self._last_risk + direction
             self._debug(f"风险等级变化过大 ({self._last_risk} -> {risk})，平滑为: {smooth_value}")
             risk = smooth_value
-        
-        # 确保风险等级在合理范围内(0-5)
         risk = max(0, min(risk, 5))
-        
-        # 更新历史值并返回
         self._last_risk = risk
         return risk
 
