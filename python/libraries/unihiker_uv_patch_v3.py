@@ -3,8 +3,9 @@
   @file       unihiker_uv_patch_v3.py
   @brief      行空板(Unihiker)紫外线指数传感器(240370)补丁文件 - Pinpong专用版
   @copyright  Copyright (c) 2021-2025 DFRobot Co.Ltd (http://www.dfrobot.com)
+              修改版本基于 https://gitee.com/dfrobotcd/ext-uvindex240370sensor 项目
   @license    The MIT License (MIT)
-  @version    V3.0.3
+  @version    V3.0.4
   @date       2025-5-13
   
   使用说明:
@@ -18,10 +19,11 @@
      - sensor.read_risk_level_data() - 读取风险等级
      
   更新日志:
+  - V3.0.4 (2025-5-13): 修复特殊值处理和优化代码结构
+  - V3.0.3 (2025-5-13): 修复数据显示和1024异常问题
   - V3.0.2 (2025-5-12): 根据官方维基校准数据计算，修复UI重叠问题，增强数据稳定性
   - V3.0.1 (2025-5-12): 修复数据异常和显示重叠问题 
   - V3.0.0 (2025-5-12): 专注于Pinpong库，移除其他库依赖，简化代码
-  - V2.0.1 (2025-5-12): 修复设备ID字节序问题
 '''
 
 import time
@@ -88,7 +90,7 @@ class PatchUVSensor:
         self._simulation_mode = simulation_mode and not force_real
         if not PINPONG_AVAILABLE and not simulation_mode:
             self._simulation_mode = True
-        self._debug_mode = False  # 默认关闭调试模式，避免过多输出
+        self._debug_mode = debug_mode  # 默认根据参数设置调试模式
         
         # 上次读取的有效值（用于错误恢复）
         self._last_data = 0
@@ -101,6 +103,7 @@ class PatchUVSensor:
     
     def _debug(self, msg):
         """输出调试信息"""
+        # 默认不输出调试信息，只在指定情况下输出
         if self._debug_mode:
             print(f"[UV传感器] {msg}")
     
@@ -383,7 +386,6 @@ class PatchUVSensor:
         
         # 特殊处理可能存在的字节序问题
         if value == 1024:  # 特殊情况，可能是字节序导致的异常值
-            self._debug(f"检测到特殊值1024，可能是字节序问题")
             # 使用前一个有效值
             if self._last_data > 50 and self._last_data < 300:
                 value = self._last_data  # 使用上一个合理值
@@ -451,27 +453,16 @@ class PatchUVSensor:
 
 # 简单的使用示例
 if __name__ == "__main__":
-    # 初始化传感器，不启用调试模式以简化输出
-    sensor = PatchUVSensor(debug_mode=False)
+    # 初始化传感器
+    sensor = PatchUVSensor()
     
     if sensor.begin():
         try:
-            print("\033[2J\033[H")  # 清屏ANSI控制码
-            print("● ● ● UV传感器就绪 - 开始读取数据 ● ● ●")
-            print("=" * 40)
-            
-            # 创建一个计数器用于周期性清屏
-            counter = 0
+            print("UV传感器就绪 - 开始读取数据")
+            print("=" * 30)
             
             while True:
-                # 每10次循环清屏一次，避免累积影响
-                counter += 1
-                if counter >= 10:
-                    print("\033[2J\033[H")  # 清屏
-                    print("● ● ● UV传感器数据 ● ● ●")
-                    counter = 0
-                
-                # 读取所有数据，然后一次性显示，避免部分刷新
+                # 读取所有数据
                 raw_data = int(sensor.read_UV_original_data())
                 time.sleep(0.5)
                 
@@ -480,13 +471,11 @@ if __name__ == "__main__":
                 
                 risk_level = int(sensor.read_risk_level_data())
                 
-                # 使用固定格式的框架显示数据
-                print("\n┌───────────────────────────┐")
-                print(f"│ 原始值:      {raw_data:4d}        │")
-                print(f"│ UV指数:      {uv_index:4d}        │")
-                print(f"│ 风险等级:    {risk_level:4d}        │")
-                print("└───────────────────────────┘")
-                
+                # 显示数据
+                print(f"原始值：{raw_data}")
+                print(f"uv指数：{uv_index}")
+                print(f"风险等级：{risk_level}")
+                print("------------")
                 time.sleep(2)
         except KeyboardInterrupt:
             pass
