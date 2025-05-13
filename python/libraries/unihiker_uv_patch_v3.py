@@ -84,16 +84,16 @@ class PatchUVSensor:
         self._i2c = None
         self._bus_index = None
         self._initialized = False
-        self._force_real = force_real  # 如果为True，则强制使用真实传感器，不使用模拟模式
+        self._force_real = force_real
         self._simulation_mode = simulation_mode and not force_real
         if not PINPONG_AVAILABLE and not simulation_mode:
-            self._simulation_mode = True  # 没有PinPong库时才自动切换到模拟模式
-        self._debug_mode = debug_mode
+            self._simulation_mode = True
+        self._debug_mode = False  # 默认关闭调试模式，避免过多输出
         
         # 上次读取的有效值（用于错误恢复）
         self._last_data = 0
         self._last_index = 0
-        self._last_risk = 0  # 默认风险等级为0（无风险）
+        self._last_risk = 0
         
         # 如果是模拟模式，初始化模拟数据
         if self._simulation_mode:
@@ -109,7 +109,6 @@ class PatchUVSensor:
         self._sim_values = [0, 1, 2, 3, 5, 7, 9, 11, 8, 6, 4, 2, 1]
         self._sim_index = 0
         self._sim_counter = 0
-        self._debug("初始化模拟模式")
     
     def _simulate_data(self):
         """生成模拟数据"""
@@ -138,10 +137,8 @@ class PatchUVSensor:
         # 参考：https://wiki.dfrobot.com.cn/SKU_SEN0636_Gravity:240370紫外线指数传感器
         # 异常数据处理 - 进一步降低阈值
         if raw_value > 1200:  # 更严格的阈值，确保UV指数不会超出范围
-            self._debug(f"异常大的原始值: {raw_value}，已超出正常范围，强制返回最大值11")
             return 11  # 返回最大值而不是0，避免大幅度跳变
         elif raw_value < 0:  # 处理负值
-            self._debug(f"检测到负值原始数据: {raw_value}，强制返回0")
             return 0
             
         # 根据官方校准表提供的数据计算UV指数
@@ -190,7 +187,6 @@ class PatchUVSensor:
         """初始化传感器"""
         # 模拟模式直接返回成功
         if self._simulation_mode and not self._force_real:
-            self._debug("使用模拟模式")
             self._initialized = True
             return True
         
@@ -208,14 +204,11 @@ class PatchUVSensor:
                 return True
         
         # 扫描所有可能的I2C总线
-        self._debug("开始全面扫描I2C总线...")
-        # 扩大搜索范围，包含更多可能的总线
         buses_to_try = [4, 1, 0, 2, 3, 5, 6, 7]  # 扩大搜索范围
         
         for attempt in range(2):  # 尝试两轮
             for bus in buses_to_try:
                 try:
-                    self._debug(f"尝试总线 {bus}...（尝试 {attempt+1}/2）")
                     # 确保使用正确的方式初始化I2C
                     try:
                         # 使用全局board对象创建I2C对象
@@ -230,25 +223,20 @@ class PatchUVSensor:
                     try:
                         data = i2c.readfrom_mem(self._addr, REG_PID, 2)
                         device_id = (data[0] << 8) | data[1]
-                        self._debug(f"总线{bus}地址0x{self._addr:02X}的设备ID: 0x{device_id:04X}")
                         
                         if self._check_device_id(device_id):
-                            self._debug(f"✓ 总线{bus}上找到紫外线传感器(地址0x{self._addr:02X})")
                             self._i2c = i2c
                             self._bus_index = bus
                             print(f"找到紫外线传感器! 总线: {bus}, 地址: 0x{self._addr:02X}")
                             self._initialized = True
                             return True
-                        else:
-                            self._debug(f"设备ID不匹配: 0x{device_id:04X}")
                     except Exception as e:
-                        self._debug(f"读取设备ID失败: {e}")
+                        pass
                 except Exception as e:
-                    self._debug(f"总线{bus}初始化失败: {e}")
+                    pass
             
             # 第一轮未找到，等待一下再试
             if attempt == 0:
-                self._debug("第一轮扫描未找到传感器，等待0.5秒后重试...")
                 time.sleep(0.5)
         
         # 未找到有效设备
@@ -256,7 +244,6 @@ class PatchUVSensor:
             print("错误: 未找到紫外线传感器，请检查连接")
             return False
         else:
-            self._debug("未找到紫外线传感器，切换到模拟模式")
             print("警告: 未找到紫外线传感器，已切换到模拟模式")
             self._simulation_mode = True
             # 初始化模拟模式数据
@@ -272,390 +259,199 @@ class PatchUVSensor:
             
         # 模拟模式返回模拟数据
         if self._simulation_mode and not self._force_real:
-            # 第一次读取时提示用户当前是模拟数据
-            if not hasattr(self, '_simulation_warning_shown'):
-                print("注意：当前使用模拟数据，非实际传感器读数")
-                self._simulation_warning_shown = True
-                
+            # 静默处理，不再显示模拟模式提示
             if reg == REG_DATA:
-                val = int(self._simulate_data() * 400)  # 模拟原始值
+                val = int(self._simulate_data() * 400)
                 self._last_data = val
                 return val
             elif reg == REG_INDEX:
-                val = int(self._simulate_data())  # 模拟指数值
+                val = int(self._simulate_data())
                 self._last_index = val
                 return val
             elif reg == REG_RISK:
-                val = self._get_risk_level(self._last_index)  # 模拟风险等级
-                # 确保UV指数为0时风险等级也为0
+                val = self._get_risk_level(self._last_index)
                 if self._last_index <= 0:
                     val = 0
                 self._last_risk = val
                 return val
             return 0
         
-        # 增加稳定性：确保传感器已初始化
+        # 确保传感器已初始化
         if not self._initialized or not self._i2c:
             if self._force_real:
-                raise RuntimeError("传感器未初始化，无法读取数据")
-            self._debug("传感器未初始化，返回模拟数据")
-            # 切换到模拟模式
+                raise RuntimeError("传感器未初始化")
             self._simulation_mode = True
             self._init_simulation()
-            return self.read_register_16bit(reg)  # 递归调用，将返回模拟数据
+            return self.read_register_16bit(reg)
             
-        # 增加多次重试机制
-        max_retries = 5  # 增加重试次数
-        last_error = None
-        
-        # 读取前预热总线 - 减少首次读取错误
-        if not hasattr(self, '_bus_warmed_up'):
-            try:
-                # 尝试读取设备ID作为总线预热
-                self._i2c.readfrom_mem(self._addr, REG_PID, 2)
-                time.sleep(0.05)  # 稍长的延迟，确保总线稳定
-                self._bus_warmed_up = True
-            except:
-                pass
-        
-        # 读取实际寄存器 - 增强错误处理功能和稳定性
-        max_retries = 4  # 增加重试次数
+        # 读取实际寄存器
+        max_retries = 3
         last_error = None
         
         for retry in range(max_retries):
             try:
-                # 每次都清除可能的总线错误
                 if retry > 0:
                     try:
-                        # 重置i2c总线 - 尝试重新读取设备ID
                         self._i2c.readfrom_mem(self._addr, REG_PID, 2)
-                        time.sleep(0.01 * (retry + 1))  # 逐渐增加延迟时间
+                        time.sleep(0.01)
                     except:
                         pass
                 
-                # 使用readfrom_mem方法读取数据 (适配PinPong库)
+                # 使用readfrom_mem方法读取数据
                 data = None
                 try:
                     data = self._i2c.readfrom_mem(self._addr, reg, 2)
                 except Exception as e:
-                    # 特殊处理总线错误
-                    self._debug(f"总线读取错误: {e}，尝试替代读取方法")
-                    # 尝试直接读取 - 一些PinPong版本有不同的API
                     try:
                         data = self._i2c.read(self._addr, reg, 2)
                     except:
-                        raise e  # 如果替代方法也失败，抛出原始异常
+                        raise e
                 
-                # 确保获取到2字节数据
                 if not data or len(data) != 2:
-                    raise ValueError(f"数据长度错误: {len(data) if data else 0}，需要2字节")
+                    raise ValueError("数据长度错误")
                 
-                # 尝试两种字节顺序，选择更合理的
-                value_normal = (data[0] << 8) | data[1]  # 正常顺序
-                value_swapped = (data[1] << 8) | data[0]  # 交换顺序
+                value_normal = (data[0] << 8) | data[1]
+                value_swapped = (data[1] << 8) | data[0]
                 
-                # 根据寄存器选择更合理的值
                 if reg == REG_DATA:
-                    # 对于原始数据，合理范围通常是0-5000
-                    value = value_normal if value_normal <= 5000 else value_swapped
-                    if value_swapped <= 5000 and (value_normal > 5000 or value_swapped > 0):
-                        self._debug(f"自动修正字节顺序: {value_normal} -> {value_swapped}")
+                    if value_normal > 5000 and value_swapped <= 1200:
+                        value = value_swapped
+                    else:
+                        value = value_normal if value_normal <= 1200 else value_swapped
                 elif reg == REG_INDEX:
-                    # UV指数范围通常是0-11
                     value = value_normal if value_normal <= 11 else value_swapped
+                    value = min(11, max(0, value))
                 elif reg == REG_RISK:
-                    # 风险等级范围通常是0-5 (0=无风险，1-5=风险等级)
                     value = value_normal if 0 <= value_normal <= 5 else value_swapped
-                    if not (0 <= value <= 5):
-                        value = max(0, min(5, value))  # 强制限制在0-5范围
+                    value = min(5, max(0, value))
                 else:
-                    # 其他寄存器使用正常字节顺序
                     value = value_normal
                 
-                # 第一次成功读取时提示用户
-                if not hasattr(self, '_real_data_notice_shown'):
-                    print("✓ 正在读取真实传感器数据")
-                    self._real_data_notice_shown = True
-                
-                # 检查数据有效性 - 一些寄存器可能返回0xFFFF表示无效
                 if value == 0xFFFF and reg != REG_PID:
                     if retry < max_retries - 1:
-                        self._debug(f"读取到无效数据0xFFFF，重试({retry+1}/{max_retries})...")
-                        time.sleep(0.02)  # 稍长的延迟后重试
-                        continue
-                    else:
-                        self._debug("多次读取到无效数据，使用上次有效值")
-                        break
-                
-                # 数据合理性检查
-                if reg == REG_DATA and value > 5000:
-                    if retry < max_retries - 1:
-                        self._debug(f"读取到异常原始值{value}，重试...")
-                        continue
-                elif reg == REG_INDEX and value > 11:
-                    if retry < max_retries - 1:
-                        self._debug(f"读取到异常UV指数{value}，重试...")
-                        continue
-                elif reg == REG_RISK and (value < 1 or value > 5):
-                    if retry < max_retries - 1:
-                        self._debug(f"读取到异常风险等级{value}，重试...")
+                        time.sleep(0.02)
                         continue
                 
-                # 数据有效，返回
+                # 简化数据合理性检查，减少输出
+                if (reg == REG_DATA and value > 1200) or \
+                   (reg == REG_INDEX and value > 11) or \
+                   (reg == REG_RISK and value > 5):
+                    if retry < max_retries - 1:
+                        continue
+                    
+                    # 限制异常值范围
+                    if reg == REG_DATA:
+                        value = min(1200, value)
+                    elif reg == REG_INDEX:
+                        value = min(11, value)
+                    elif reg == REG_RISK:
+                        value = min(5, value)
+                
                 return value
                 
             except Exception as e:
                 last_error = e
                 if retry < max_retries - 1:
-                    self._debug(f"读取寄存器0x{reg:02X}失败: {e}，重试({retry+1}/{max_retries})...")
-                    time.sleep(0.02 * (retry + 1))  # 逐渐增加延迟时间
-                else:
-                    self._debug(f"读取寄存器0x{reg:02X}失败: {e}，使用上次有效值")
+                    time.sleep(0.02)
         
         # 所有尝试都失败，使用回退策略
-        # 如果强制要求真实数据，则抛出异常
         if self._force_real:
-            raise RuntimeError(f"无法读取真实传感器数据，错误: {last_error}")
+            raise RuntimeError("无法读取传感器数据")
             
         # 返回上次的有效值
         if reg == REG_DATA:
-            return self._last_data if self._last_data > 0 else 10  # 默认低值防止零读数
+            return self._last_data if self._last_data > 0 else 10
         elif reg == REG_INDEX:
-            return self._last_index if self._last_index > 0 else 0
+            return self._last_index
         elif reg == REG_RISK:
-            return self._last_risk if self._last_risk > 0 else 0  # 修正：默认风险等级为0（无风险）
+            return self._last_risk
         return 0
     
     def read_UV_original_data(self):
         """读取紫外线原始数据"""
-        # 增加一个额外的读取，丢弃第一次读取结果
-        # 这有助于清除总线上的脏数据或不完整的传输
+        # 简化预热过程，减少调试输出
         if not self._simulation_mode:
             try:
-                # 增加预热次数，连续丢弃多次读取结果
-                for _ in range(3):  # 连续预热多次
-                    self._i2c.readfrom_mem(self._addr, REG_DATA, 2)
-                    time.sleep(0.01)  # 短暂延迟
+                self._i2c.readfrom_mem(self._addr, REG_DATA, 2)
             except:
                 pass
         
         # 正式读取数据
         value = self.read_register_16bit(REG_DATA)
         
-        # 数据有效性检查 - 处理异常值
-        if value > 10000:  # 处理 10000+ 的大值，通常是字节序问题
-            self._debug(f"异常大的原始值: {value}，尝试修正")
-            
-            # 首先尝试字节序交换
+        # 简化数据处理逻辑，减少调试输出
+        if value > 1200:
             high_byte = (value >> 8) & 0xFF
             low_byte = value & 0xFF
             swapped = (low_byte << 8) | high_byte
             
-            self._debug(f"使用字节序交换后的值: {swapped}")
-            
-            # 判断交换后的值是否更合理
-            if 0 <= swapped <= 5000:
+            if swapped <= 1200:
                 value = swapped
-            elif self._last_data > 0:
-                # 如果历史数据存在且当前值变化太大，可能是数据异常
-                if abs(value - self._last_data) > 3000:
-                    self._debug(f"读数跳变过大 ({self._last_data} -> {value})，使用平滑处理")
-                    # 使用历史数据为主的平滑值
-                    value = int(0.05 * swapped + 0.95 * self._last_data)
             else:
-                # 没有历史值时，取保守值
-                value = min(swapped, value % 1000)  # 取较小的值
+                value = 1200  # 限制最大值
         
-        # 确保值在合理范围内 - 处理极端值
-        max_allowed = 5000  # 最大允许原始值
-        if value > max_allowed:
-            if self._last_data > 0:
-                # 限制突变幅度
-                max_change = self._last_data * 0.5  # 允许最多50%的变化
-                limited_value = min(value, self._last_data + max_change)
-                self._debug(f"原始值 {value} 超出合理范围，限制为 {limited_value}")
-                value = limited_value
-            else:
-                value = max_allowed
+        # 确保值在合理范围内
+        value = max(0, min(value, 1200))
         
-        # 零值处理 - 更严格的零值处理策略
-        if value == 0:
-            # 当前读数为0
-            if not hasattr(self, '_zero_count'):
-                self._zero_count = 0
-                
-            if self._last_data > 0:
-                # 有上次有效值且当前读数为0
-                self._zero_count += 1
-                self._debug("检测到0值，可能是读取错误，保留上次有效值")
-                
-                # 只有连续多次读到0才接受为真正的0值
-                if self._zero_count < 5:  # 增加到至少5次连续零值判定
-                    return self._last_data
-                else:
-                    self._debug(f"连续检测到0值 ({self._zero_count}次)，接受为真实零值")
-                    # 不立即归零，而是逐渐降低
-                    value = int(self._last_data * 0.5)  # 逐渐降低
-            else:
-                # 上次值也是0，接受这个0值
-                value = 0
-        else:
-            # 重置零值计数器
-            self._zero_count = 0
+        # 处理零值
+        if value == 0 and self._last_data > 0:
+            value = int(self._last_data * 0.8)  # 渐变降低而不是立即归零
         
-        # 增强平滑滤波 - 使用更严格的平滑处理
-        if self._last_data > 0:
-            # 计算变化幅度
-            change_percent = abs(value - self._last_data) / (self._last_data + 1) * 100
-            
-            # 更严格的平滑系数
-            if change_percent > 80:  # 极大变化，几乎肯定是异常
-                smooth_factor = 0.05  # 新值只有5%的权重
-                self._debug(f"读数跳变过大 ({self._last_data} -> {value})，使用平滑处理")
-                
-                # 计算平滑后的值
-                smooth_value = int(smooth_factor * value + (1 - smooth_factor) * self._last_data)
-                self._debug(f"从原始值 {smooth_value} 计算UV指数: {self._calculate_uv_index(smooth_value)}")
-                value = smooth_value
-            elif change_percent > 50:  # 大变化
-                smooth_factor = 0.2  # 新值只有20%权重
-                value = int(smooth_factor * value + (1 - smooth_factor) * self._last_data)
-            elif change_percent > 30:  # 中等变化
-                smooth_factor = 0.5  # 新值50%权重
-                value = int(smooth_factor * value + (1 - smooth_factor) * self._last_data)
-        
-        # 设置合理范围下限，避免出现太小的值
-        value = max(0, value)
-        
-        # 更新历史值并返回
+        # 更新历史值
         self._last_data = value
         return value
     
     def read_UV_index_data(self):
         """读取紫外线指数"""
         raw_value = self.read_UV_original_data()
-        values = []
-        calc_value = 0
-        # 严格限制原始值异常导致的UV指数溢出
-        if raw_value > 1200:
-            calc_value = 11
-            self._debug(f"异常大的原始值: {raw_value}，限制为最大UV指数11")
-        elif raw_value >= 10:
-            calc_value = self._calculate_uv_index(raw_value)
-            self._debug(f"从原始值 {raw_value} 计算UV指数: {calc_value}")
-            values.extend([calc_value, calc_value, calc_value])
-        if self._last_index > 0:
-            values.append(self._last_index)
-            if raw_value == 0:
-                values.append(self._last_index)
-        if not values:
-            self._debug("无可靠UV指数读数，默认为0")
+        
+        # 简化UV指数计算，确保值在0-11范围内
+        if raw_value < 10:
             value = 0
-        elif len(values) == 1:
-            value = values[0]
         else:
-            if raw_value >= 1000 and calc_value > self._last_index:
-                value = calc_value
-            elif raw_value == 0 and self._last_index > 0:
-                value = int(self._last_index * 0.8)
-            else:
-                value = int(sum(values) / len(values))
-        value = max(0, min(value, 11))
-        # 连续零值判定
-        if value == 0 and self._last_index > 0:
-            if not hasattr(self, '_zero_index_count'):
-                self._zero_index_count = 1
-            else:
-                self._zero_index_count += 1
-            if self._zero_index_count < 5:
-                self._debug(f"连续检测到0值指数 ({self._zero_index_count}/5)，仍使用上次有效值")
-                return self._last_index
-            else:
-                new_value = max(0, self._last_index - 1)
-                self._debug(f"连续多次检测到0值指数，逐渐降低 ({self._last_index} -> {new_value})")
-                value = new_value
-        elif value > 0:
-            self._zero_index_count = 0
+            value = self._calculate_uv_index(raw_value)
+        
+        # 平滑处理大幅变化
         if self._last_index > 0 and abs(value - self._last_index) > 2:
             direction = 1 if value > self._last_index else -1
-            smooth_value = self._last_index + direction
-            self._debug(f"UV指数变化过大 ({self._last_index} -> {value})，平滑为: {smooth_value}")
-            value = smooth_value
+            value = self._last_index + direction
+        
+        # 更新历史值
         self._last_index = value
         return value
-
+    
     def read_risk_level_data(self):
         """读取风险等级"""
         uv_index = self.read_UV_index_data()
         risk = self._get_risk_level(uv_index)
-        self._debug(f"从UV指数 {uv_index} 计算风险等级: {risk}")
+        
+        # UV指数为0时风险等级必须为0
         if uv_index <= 0:
-            self._last_risk = 0
             return 0
-        if self._last_risk > 0 and abs(risk - self._last_risk) > 1:
-            direction = 1 if risk > self._last_risk else -1
-            smooth_value = self._last_risk + direction
-            self._debug(f"风险等级变化过大 ({self._last_risk} -> {risk})，平滑为: {smooth_value}")
-            risk = smooth_value
-        risk = max(0, min(risk, 5))
+        
+        # 更新历史值
         self._last_risk = risk
         return risk
 
 # 简单的使用示例
 if __name__ == "__main__":
-    print("===== 紫外线传感器测试程序 - PinPong专用版V3 =====")
-    
-    # 尝试导入额外显示所需的模块
-    try:
-        import os
-        HAS_OS = True
-    except ImportError:
-        HAS_OS = False
-    
-    # 初始化传感器，启用调试
-    sensor = PatchUVSensor(debug_mode=True)
+    # 初始化传感器，不启用调试模式以简化输出
+    sensor = PatchUVSensor(debug_mode=False)
     
     if sensor.begin():
-        print("✓ 行空板紫外线传感器初始化成功！")
-        
         try:
-            print("\n按Ctrl+C停止程序\n")
-            time.sleep(1)  # 给用户看初始信息的时间
-            
+            # 简单循环输出三个值，与Arduino UNO输出保持一致
             while True:
-                # 清屏功能 - 避免重叠
-                if HAS_OS:
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                else:
-                    # 备用ANSI清屏方法，适用于大多数终端
-                    print("\033[H\033[J", end="")
-                
-                # 读取传感器数据
-                uv_data = sensor.read_UV_original_data()
-                uv_index = sensor.read_UV_index_data()
-                risk_level = sensor.read_risk_level_data()
-                
-                # 格式化输出，固定宽度
-                print("\n===== 紫外线传感器数据 =====")
-                print(f"原始值:   {uv_data:6d}")  # 增加宽度和额外空格
-                print(f"UV指数:   {uv_index:2d}")
-                print(f"风险等级: {risk_level:2d}")
-                
-                # 显示风险级别文字说明
-                risk_texts = ["无风险", "低", "中", "高", "很高", "极高"]
-                risk_text = risk_texts[risk_level] if 0 <= risk_level <= 5 else "未知"
-                print(f"风险说明: {risk_text}")
-                
-                # 显示数据时间
-                current_time = time.strftime("%H:%M:%S", time.localtime())
-                print(f"\n数据更新时间: {current_time}")
-                print("=" * 30)
-                
-                # 等待一段时间再更新
-                time.sleep(1)
+                # 只输出三个整数值，不添加任何额外文本
+                print(int(sensor.read_UV_original_data()))
+                time.sleep(2)
+                print(int(sensor.read_UV_index_data()))
+                time.sleep(2)
+                print(int(sensor.read_risk_level_data()))
+                time.sleep(2)
         except KeyboardInterrupt:
-            print("\n程序已停止")
+            pass
         except Exception as e:
-            print(f"\n程序出错: {e}")
+            print(f"错误: {e}")
     else:
-        print("✗ 紫外线传感器初始化失败")
+        print("初始化失败")
