@@ -442,14 +442,37 @@ if __name__ == "__main__":
     
     if sensor.begin():
         try:
-            # 格式化输出三个值，防止显示重叠
+            print("\033[2J\033[H")  # 清屏ANSI控制码
+            print("● ● ● UV传感器就绪 - 开始读取数据 ● ● ●")
+            print("=" * 40)
+            
+            # 创建一个计数器用于周期性清屏
+            counter = 0
+            
             while True:
-                # 添加标签明确区分数据类型，避免数据混淆
-                print(f"原始值：{int(sensor.read_UV_original_data())}")
-                time.sleep(2)
-                print(f"uv指数：{int(sensor.read_UV_index_data())}")
-                time.sleep(2)
-                print(f"风险等级：{int(sensor.read_risk_level_data())}")
+                # 每10次循环清屏一次，避免累积影响
+                counter += 1
+                if counter >= 10:
+                    print("\033[2J\033[H")  # 清屏
+                    print("● ● ● UV传感器数据 ● ● ●")
+                    counter = 0
+                
+                # 读取所有数据，然后一次性显示，避免部分刷新
+                raw_data = int(sensor.read_UV_original_data())
+                time.sleep(0.5)
+                
+                uv_index = int(sensor.read_UV_index_data())
+                time.sleep(0.5)
+                
+                risk_level = int(sensor.read_risk_level_data())
+                
+                # 使用固定格式的框架显示数据
+                print("\n┌───────────────────────────┐")
+                print(f"│ 原始值:      {raw_data:4d}        │")
+                print(f"│ UV指数:      {uv_index:4d}        │")
+                print(f"│ 风险等级:    {risk_level:4d}        │")
+                print("└───────────────────────────┘")
+                
                 time.sleep(2)
         except KeyboardInterrupt:
             pass
