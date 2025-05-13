@@ -93,7 +93,7 @@ class PatchUVSensor:
         # 上次读取的有效值（用于错误恢复）
         self._last_data = 0
         self._last_index = 0
-        self._last_risk = 1  # 默认风险等级为1（低）
+        self._last_risk = 0  # 默认风险等级为0（无风险）
         
         # 如果是模拟模式，初始化模拟数据
         if self._simulation_mode:
@@ -136,9 +136,12 @@ class PatchUVSensor:
     def _calculate_uv_index(self, raw_value):
         """根据原始值计算UV指数 - 基于官方维基校准"""
         # 参考：https://wiki.dfrobot.com.cn/SKU_SEN0636_Gravity:240370紫外线指数传感器
-        # 异常数据处理
-        if raw_value > 10000:
-            self._debug(f"异常大的原始值: {raw_value}，可能是读取错误")
+        # 异常数据处理 - 进一步降低阈值
+        if raw_value > 1200:  # 更严格的阈值，确保UV指数不会超出范围
+            self._debug(f"异常大的原始值: {raw_value}，已超出正常范围，强制返回最大值11")
+            return 11  # 返回最大值而不是0，避免大幅度跳变
+        elif raw_value < 0:  # 处理负值
+            self._debug(f"检测到负值原始数据: {raw_value}，强制返回0")
             return 0
             
         # 根据官方校准表提供的数据计算UV指数
@@ -170,7 +173,9 @@ class PatchUVSensor:
     
     def _get_risk_level(self, uv_index):
         """根据UV指数计算风险等级"""
-        if uv_index <= 2:
+        if uv_index <= 0:  # 修改为包括小于等于0的所有情况
+            return 0  # 无风险
+        elif uv_index <= 2:
             return 1  # 低
         elif uv_index <= 5:
             return 2  # 中
@@ -282,6 +287,9 @@ class PatchUVSensor:
                 return val
             elif reg == REG_RISK:
                 val = self._get_risk_level(self._last_index)  # 模拟风险等级
+                # 确保UV指数为0时风险等级也为0
+                if self._last_index <= 0:
+                    val = 0
                 self._last_risk = val
                 return val
             return 0
@@ -415,7 +423,7 @@ class PatchUVSensor:
         elif reg == REG_INDEX:
             return self._last_index if self._last_index > 0 else 0
         elif reg == REG_RISK:
-            return self._last_risk if self._last_risk > 0 else 1  # 默认最低风险等级
+            return self._last_risk if self._last_risk > 0 else 0  # 修正：默认风险等级为0（无风险）
         return 0
     
     def read_UV_original_data(self):
@@ -522,7 +530,8 @@ class PatchUVSensor:
         # 更新历史值并返回
         self._last_data = value
         return value
-     def read_UV_index_data(self):
+    
+    def read_UV_index_data(self):
         """读取紫外线指数"""
         # 可靠性优先：首选从原始值计算UV指数，这比直接读取寄存器更可靠
         raw_value = self.read_UV_original_data()
@@ -532,8 +541,11 @@ class PatchUVSensor:
         calc_value = 0  # 预先定义，避免未定义错误
         
         # 方法1: 从原始值计算UV指数 (最可靠)
-        # 增加更严格的有效值判断
-        if raw_value >= 10:  # 降低有效值门槛，更多值被视为有效
+        # 增加更严格的有效值判断并限制异常大的原始值
+        if raw_value > 1200:  # 超过阈值的原始值直接映射到最大UV指数
+            calc_value = 11
+            self._debug(f"异常大的原始值: {raw_value}，限制为最大UV指数11")
+        elif raw_value >= 10:  # 降低有效值门槛，更多值被视为有效
             calc_value = self._calculate_uv_index(raw_value)
             self._debug(f"从原始值 {raw_value} 计算UV指数: {calc_value}")
             values.append(calc_value)
@@ -594,16 +606,6 @@ class PatchUVSensor:
         elif value > 0:
             self._zero_index_count = 0
             
-        # 更新历史值并返回
-        self._last_index = value
-        return value
-                else:
-                    self._debug("连续3次检测到0值指数，接受为真实值")
-                    self._zero_index_count = 0
-        else:
-            # 重置零值计数器
-            self._zero_index_count = 0
-        
         # 平滑处理：大幅变化时逐渐过渡
         if self._last_index > 0 and abs(value - self._last_index) > 2:
             # 变化超过2个单位，使用平滑过渡
@@ -624,6 +626,11 @@ class PatchUVSensor:
         risk = self._get_risk_level(uv_index)
         self._debug(f"从UV指数 {uv_index} 计算风险等级: {risk}")
         
+        # 特殊处理：UV指数为0时，风险等级必须为0
+        if uv_index <= 0:
+            self._last_risk = 0
+            return 0
+            
         # 平滑处理：避免风险等级频繁跳变
         if self._last_risk > 0 and abs(risk - self._last_risk) > 1:
             # 风险等级变化超过1级，使用渐变
@@ -632,8 +639,8 @@ class PatchUVSensor:
             self._debug(f"风险等级变化过大 ({self._last_risk} -> {risk})，平滑为: {smooth_value}")
             risk = smooth_value
         
-        # 确保风险等级在合理范围内(1-5)
-        risk = max(1, min(risk, 5))
+        # 确保风险等级在合理范围内(0-5)
+        risk = max(0, min(risk, 5))
         
         # 更新历史值并返回
         self._last_risk = risk
@@ -680,8 +687,8 @@ if __name__ == "__main__":
                 print(f"风险等级: {risk_level:2d}")
                 
                 # 显示风险级别文字说明
-                risk_texts = ["", "低", "中", "高", "很高", "极高"]
-                risk_text = risk_texts[risk_level] if 1 <= risk_level <= 5 else "未知"
+                risk_texts = ["无风险", "低", "中", "高", "很高", "极高"]
+                risk_text = risk_texts[risk_level] if 0 <= risk_level <= 5 else "未知"
                 print(f"风险说明: {risk_text}")
                 
                 # 显示数据时间
