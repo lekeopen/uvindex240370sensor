@@ -1,0 +1,59 @@
+{
+  "name": {
+    "zh-cn": "Gravity: 240370紫外线指数传感器",
+    "en": "Gravity: UV Index 240370 Sensor"
+  },
+  "description": {
+    "zh-cn": "针对行空板优化的Gravity 240370紫外线指数传感器扩展，支持PinPong库和I2C通信。",
+    "zh-tw": "針對行空板優化的Gravity 240370紫外線指數傳感器擴展，支持PinPong庫和I2C通信。",
+    "en": "Gravity: UV Index 240370 Sensor optimized for UniHiker with PinPong library and I2C support."
+  },
+  "author": "rockts",
+  "email": "gaopeng@lekee.cc",
+  "license": "MIT",
+  "isBoard": false,
+  "id": "lekeopen-uvindex240370sensor",
+  "platform": [
+    "win",
+    "mac",
+    "linux"
+  ],
+  "version": "0.1.0",
+  "mode": [
+    "arduinoC",
+    "python"
+  ],
+  "asset": {
+    "arduinoC": {
+      "dir": "arduinoC/",
+      "board": [
+        "microbit",
+        "firebeetleesp32e",
+        "arduino",
+        "esp32",
+        "esp32s3bit"
+      ],
+      "main": "main.ts",
+      "files": [
+        "_images/featured.png",
+        "_images/icon.svg",
+        "_locales/en.json",
+        "_locales/zh-cn.json",
+        "_locales/zh-tw.json",
+        "libraries/libraries.zip"
+      ]
+    },
+    "python": {
+      "dir": "python/",
+      "main": "main.ts",
+      "files": [
+        "libraries/libraries.zip",
+        "_images/featured.png",
+        "_images/icon.svg",
+        "_locales/en.json",
+        "_locales/zh-cn.json",
+        "_locales/zh-tw.json"
+      ]
+    }
+  }
+}

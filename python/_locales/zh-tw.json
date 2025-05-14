@@ -1,0 +1,7 @@
+{
+    "uVIndex240370Sensor.initSensor": "初始化紫外線傳感器",
+    "uVIndex240370Sensor.readUV": "讀取紫外線[TYPE]",
+    "uVIndex240370Sensor.uVDataType.0": "原始數據",
+    "uVIndex240370Sensor.uVDataType.1": "UV指數",
+    "uVIndex240370Sensor.uVDataType.2": "風險等級"
+}

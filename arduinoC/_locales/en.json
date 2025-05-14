@@ -1,0 +1,7 @@
+{
+  "arduinoUVIndex240370Sensor.initUVIndex240370Sensor_I2C|block": "init UV Sensor I2C address as 0x23",
+  "arduinoUVIndex240370Sensor.readUv|block": "read UV [eType]",
+  "arduinoUVIndex240370Sensor.eDataType.OriginalData|menu": "OriginalData",
+  "arduinoUVIndex240370Sensor.eDataType.RiskLevelData|menu": "RiskLevelData",
+  "arduinoUVIndex240370Sensor.eDataType.IndexData|menu": "IndexData"
+}

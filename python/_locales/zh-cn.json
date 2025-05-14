@@ -1,0 +1,7 @@
+{
+    "uVIndex240370Sensor.initSensor": "初始化紫外线传感器",
+    "uVIndex240370Sensor.readUV": "读取紫外线[TYPE]",
+    "uVIndex240370Sensor.uVDataType.0": "原始数据",
+    "uVIndex240370Sensor.uVDataType.1": "UV指数",
+    "uVIndex240370Sensor.uVDataType.2": "风险等级"
+}

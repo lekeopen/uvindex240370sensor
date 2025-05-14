@@ -1,0 +1,7 @@
+{
+    "uVIndex240370Sensor.initSensor": "Initialize UV Sensor",
+    "uVIndex240370Sensor.readUV": "Read UV [TYPE]",
+    "uVIndex240370Sensor.uVDataType.0": "Raw Data",
+    "uVIndex240370Sensor.uVDataType.1": "UV Index",
+    "uVIndex240370Sensor.uVDataType.2": "Risk Level"
+}

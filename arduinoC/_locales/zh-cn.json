@@ -1,0 +1,7 @@
+{
+  "arduinoUVIndex240370Sensor.initUVIndex240370Sensor_I2C|block": "初始化240370紫外线指数传感器I2C地址为0x23",
+  "arduinoUVIndex240370Sensor.readUv|block": "获取传感器的 [eType]",
+  "arduinoUVIndex240370Sensor.eDataType.OriginalData|menu": "紫外线原始数据",
+  "arduinoUVIndex240370Sensor.eDataType.RiskLevelData|menu": "紫外线危害等级",
+  "arduinoUVIndex240370Sensor.eDataType.IndexData|menu": "紫外线指数"
+}

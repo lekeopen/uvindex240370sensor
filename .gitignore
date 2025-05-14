@@ -1,0 +1,33 @@
+# 忽略所有文件和目录
+/*
+
+# 不忽略这些文件和目录
+!/.gitignore
+!/config.json
+!/README.md
+!/README_EN.md
+!/LICENSE
+!/arduinoC/
+!/python/
+!/tests/
+!/deploy/
+!/test_uv_fix.ino
+!/uv_test.cpp
+
+# 只保留最新的 mpext 文件
+*.mpext
+!/rockts-lekeopen-uvindex240370sensor-thirdex-V0.1.0.mpext
+
+# 忽略构建目录和临时文件
+build/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.DS_Store
+Thumbs.db
+
+# 忽略备份和临时目录
+/backup/
+/temp_repo/
+/temp/
