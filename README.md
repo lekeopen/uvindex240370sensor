@@ -147,7 +147,7 @@ void loop() {
 ├── LICENSE                   # MIT许可证
 ├── README.md                 # 中文文档
 ├── README_EN.md              # 英文文档
-├── lekeopen-uvindex240370sensor-V0.1.0.mpext  # 最新版本的扩展包
+├── rockts-lekeopen-uvindex240370sensor-thirdex-V0.1.0.mpext  # 最新版本的扩展包
 ├── arduinoC/                 # Arduino平台相关文件（精简结构）
 │   ├── _images/
 │   ├── _locales/

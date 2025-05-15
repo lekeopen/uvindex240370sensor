@@ -147,7 +147,7 @@ void loop() {
 ├── LICENSE                   # MIT license
 ├── README.md                 # Chinese documentation
 ├── README_EN.md              # English documentation
-├── lekeopen-uvindex240370sensor-V0.1.0.mpext  # Latest version of extension package
+├── rockts-lekeopen-uvindex240370sensor-thirdex-V0.1.0.mpext  # Latest version of extension package
 ├── arduinoC/                 # Arduino platform files (simplified structure)
 │   ├── _images/
 │   ├── _locales/
